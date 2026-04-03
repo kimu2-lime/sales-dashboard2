@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>売上ダッシュボード</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic', sans-serif;
+  background: #f4f5f7;
+  color: #1a1a2e;
+  min-height: 100vh;
+  font-size: 14px;
+}
+
+/* ===== PASSWORD SCREEN ===== */
+#pwScreen {
+  position: fixed; inset: 0; z-index: 9999;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex; align-items: center; justify-content: center;
+}
+.pw-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 48px 44px;
+  width: 90%; max-width: 400px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.18);
+  text-align: center;
+}
+.pw-brand {
+  font-size: 11px; font-weight: 700; letter-spacing: 3px;
+  color: #9b8ec4; text-transform: uppercase; margin-bottom: 6px;
+}
+.pw-title {
+  font-size: 22px; font-weight: 800; color: #1a1a2e; margin-bottom: 4px;
+}
+.pw-sub { font-size: 13px; color: #888; margin-bottom: 32px; }
+.pw-field {
+  width: 100%; padding: 14px 16px;
+  border: 2px solid #e8e8f0; border-radius: 10px;
+  font-size: 15px; color: #1a1a2e; outline: none;
+  transition: border 0.2s; letter-spacing: 2px; text-align: center;
+}
+.pw-field:focus { border-color: #667eea; }
+.pw-err { font-size: 12px; color: #e53e3e; margin-top: 8px; min-height: 18px; }
+.pw-submit {
+  margin-top: 16px; width: 100%; padding: 14px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border: none; border-radius: 10px;
+  color: #fff; font-size: 15px; font-weight: 700;
+  cursor: pointer; transition: opacity 0.2s; letter-spacing: 1px;
+}
+.pw-submit:hover { opacity: 0.88; }
+
+/* ===== APP SHELL ===== */
+#app { display: none; }
+
+/* ===== HEADER ===== */
+.header {
+  background: #fff;
+  border-bottom: 1px solid #e8e8f0;
+  position: sticky; top: 0; z-index: 200;
+  box-shadow: 0 1px 8px rgba(0,0,0,0.06);
+}
+.header-inner {
+  max-width: 1440px; margin: 0 auto;
+  padding: 0 24px;
+  height: 60px;
+  display: flex; align-items: center; gap: 20px;
+}
+.brand {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+.brand-logo {
+  width: 34px; height: 34px; border-radius: 8px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 16px; font-weight: 800;
+}
+.brand-name { font-size: 15px; font-weight: 800; color: #1a1a2e; }
+.brand-sub { font-size: 11px; color: #999; margin-top: 1px; }
+
+.header-spacer { flex: 1; }
+
+.month-tabs { display: flex; gap: 4px; }
+.month-tab {
+  padding: 7px 16px; border-radius: 8px;
+  border: 1.5px solid #e0e0ec; background: transparent;
+  color: #666; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.18s;
+}
+.month-tab.active {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-color: transparent; color: #fff;
+}
+.month-tab:hover:not(.active) { border-color: #667eea; color: #667eea; }
+
+.view-switch {
+  display: flex; gap: 2px;
+  background: #f0f0f8; border-radius: 8px; padding: 3px;
+}
+.vs-btn {
+  padding: 5px 12px; border-radius: 6px;
+  border: none; background: transparent;
+  font-size: 12px; font-weight: 600; color: #888;
+  cursor: pointer; transition: all 0.15s;
+}
+.vs-btn.active { background: #fff; color: #667eea; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+
+/* ===== BREADCRUMB ===== */
+.breadcrumb {
+  max-width: 1440px; margin: 0 auto;
+  padding: 16px 24px 0;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: #999;
+  display: none;
+}
+.breadcrumb.visible { display: flex; }
+.bc-link {
+  color: #667eea; cursor: pointer; font-weight: 600;
+  text-decoration: none;
+}
+.bc-link:hover { text-decoration: underline; }
+.bc-sep { color: #ccc; }
+.bc-current { color: #444; font-weight: 600; }
+
+/* ===== MAIN ===== */
+.main { max-width: 1440px; margin: 0 auto; padding: 24px; }
+
+/* ===== LIST VIEW HEADER ===== */
+.list-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+}
+.list-title { font-size: 20px; font-weight: 800; color: #1a1a2e; }
+.list-meta { font-size: 13px; color: #888; margin-top: 2px; }
+.search-box {
+  padding: 9px 14px 9px 36px; border-radius: 10px;
+  border: 1.5px solid #e0e0ec; font-size: 13px; color: #1a1a2e;
+  width: 240px; outline: none; transition: border 0.2s;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 11px center;
+}
+.search-box:focus { border-color: #667eea; }
+
+/* ===== STORE CARDS GRID ===== */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.store-card {
+  background: #fff;
+  border-radius: 14px;
+  border: 1.5px solid #eaeaf4;
+  padding: 20px 22px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.store-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  opacity: 0; transition: opacity 0.2s;
+}
+.store-card:hover {
+  border-color: #667eea;
+  box-shadow: 0 8px 24px rgba(102,126,234,0.14);
+  transform: translateY(-2px);
+}
+.store-card:hover::before { opacity: 1; }
+
+.card-name {
+  font-size: 13px; font-weight: 700; color: #1a1a2e;
+  line-height: 1.4; margin-bottom: 14px;
+  padding-right: 24px;
+}
+.card-arrow {
+  position: absolute; top: 20px; right: 18px;
+  color: #ccc; font-size: 16px; transition: color 0.2s, transform 0.2s;
+}
+.store-card:hover .card-arrow { color: #667eea; transform: translateX(2px); }
+
+.card-kgi {
+  font-size: 26px; font-weight: 800; color: #1a1a2e;
+  margin-bottom: 4px; letter-spacing: -0.5px;
+}
+.card-kgi-label { font-size: 11px; color: #999; font-weight: 500; margin-bottom: 14px; }
+
+.card-kpis {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid #f0f0f8;
+}
+.card-kpi { }
+.ck-label { font-size: 10px; color: #aaa; font-weight: 600; letter-spacing: 0.3px; margin-bottom: 3px; }
+.ck-value { font-size: 16px; font-weight: 700; }
+.ck-value .ck-unit { font-size: 11px; font-weight: 500; margin-left: 1px; }
+.ck-new { color: #4f87f7; }
+.ck-contract { color: #38b06c; }
+.ck-price { color: #d97706; }
+.ck-rate { color: #9b59b6; }
+
+.no-data-card {
+  opacity: 0.45; cursor: default;
+}
+.no-data-card:hover {
+  transform: none; box-shadow: none; border-color: #eaeaf4;
+}
+.no-data-card:hover::before { opacity: 0; }
+.no-data-badge {
+  display: inline-block; font-size: 11px; color: #bbb;
+  background: #f5f5f8; border-radius: 4px; padding: 2px 8px;
+  margin-top: 8px;
+}
+
+/* ===== DETAIL VIEW ===== */
+#detailView { display: none; }
+
+.detail-store-header {
+  margin-bottom: 20px;
+}
+.detail-store-name {
+  font-size: 20px; font-weight: 800; color: #1a1a2e; line-height: 1.3;
+}
+.detail-period { font-size: 13px; color: #888; margin-top: 4px; }
+
+/* KGI */
+.kgi-bar {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px; padding: 24px 28px; margin-bottom: 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px;
+}
+.kgi-left { }
+.kgi-tag {
+  display: inline-block; background: rgba(255,255,255,0.2);
+  border-radius: 4px; padding: 2px 8px;
+  font-size: 10px; color: rgba(255,255,255,0.85);
+  font-weight: 700; letter-spacing: 1.5px; margin-bottom: 8px;
+}
+.kgi-amount { font-size: 40px; font-weight: 800; color: #fff; letter-spacing: -1px; line-height: 1; }
+.kgi-amount .kgi-unit { font-size: 18px; font-weight: 600; margin-left: 4px; }
+.kgi-sublabel { font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 6px; }
+
+/* Detail KPIs */
+.detail-kpis {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 12px; margin-bottom: 16px;
+}
+.dkpi {
+  background: #fff; border-radius: 12px;
+  border: 1.5px solid #eaeaf4; padding: 18px 20px;
+  transition: box-shadow 0.2s;
+}
+.dkpi:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); }
+.dkpi-icon { font-size: 20px; margin-bottom: 8px; }
+.dkpi-label { font-size: 11px; color: #aaa; font-weight: 600; letter-spacing: 0.3px; margin-bottom: 4px; }
+.dkpi-sublabel { font-size: 10px; color: #ccc; margin-bottom: 4px; }
+.dkpi-value { font-size: 28px; font-weight: 800; line-height: 1; }
+.dkpi-unit { font-size: 13px; font-weight: 500; margin-left: 2px; }
+.dkpi.new .dkpi-value { color: #4f87f7; }
+.dkpi.contract .dkpi-value { color: #38b06c; }
+.dkpi.price .dkpi-value { color: #d97706; }
+.dkpi.rate .dkpi-value { color: #9b59b6; }
+.dkpi.new { border-top: 3px solid #4f87f7; }
+.dkpi.contract { border-top: 3px solid #38b06c; }
+.dkpi.price { border-top: 3px solid #d97706; }
+.dkpi.rate { border-top: 3px solid #9b59b6; }
+
+/* Charts */
+.charts-row {
+  display: grid; grid-template-columns: 3fr 2fr;
+  gap: 12px;
+}
+.chart-box {
+  background: #fff; border-radius: 12px;
+  border: 1.5px solid #eaeaf4; padding: 18px 20px;
+}
+.chart-box-title {
+  font-size: 13px; font-weight: 700; color: #444;
+  margin-bottom: 14px;
+}
+.chart-box-wrap { position: relative; height: 200px; }
+
+/* ===== MOBILE VIEW OVERRIDES ===== */
+body.mobile .cards-grid { grid-template-columns: 1fr; }
+body.mobile .detail-kpis { grid-template-columns: repeat(2, 1fr); }
+body.mobile .charts-row { grid-template-columns: 1fr; }
+body.mobile .kgi-amount { font-size: 30px; }
+body.mobile .dkpi-value { font-size: 22px; }
+body.mobile .header-inner { padding: 0 14px; gap: 10px; }
+body.mobile .main { padding: 14px 12px; }
+
+@media (max-width: 640px) {
+  .cards-grid { grid-template-columns: 1fr; }
+  .detail-kpis { grid-template-columns: repeat(2, 1fr); }
+  .charts-row { grid-template-columns: 1fr; }
+  .kgi-amount { font-size: 30px; }
+  .search-box { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<!-- パスワード画面 -->
+<div id="pwScreen">
+  <div class="pw-card">
+    <div class="pw-brand">LIME FIT</div>
+    <div class="pw-title">売上ダッシュボード</div>
+    <div class="pw-sub">社内専用 ／ ログインしてください</div>
+    <input type="password" id="pwField" class="pw-field" placeholder="パスワード" autocomplete="current-password">
+    <div class="pw-err" id="pwErr"></div>
+    <button class="pw-submit" onclick="doLogin()">ログイン →</button>
+  </div>
+</div>
+
+<!-- アプリ -->
+<div id="app">
+  <header class="header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-logo">L</div>
+        <div>
+          <div class="brand-name">LIME FIT</div>
+          <div class="brand-sub">売上ダッシュボード</div>
+        </div>
+      </div>
+      <div class="header-spacer"></div>
+      <div class="month-tabs" id="monthTabs"></div>
+      <div class="view-switch">
+        <button class="vs-btn active" id="vsPC" onclick="setView('pc')">🖥 PC</button>
+        <button class="vs-btn" id="vsSP" onclick="setView('sp')">📱 スマホ</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- パンくず -->
+  <div class="breadcrumb" id="breadcrumb">
+    <a class="bc-link" onclick="goList()">← 店舗一覧</a>
+    <span class="bc-sep">/</span>
+    <span class="bc-current" id="bcStore"></span>
+  </div>
+
+  <div class="main">
+    <!-- 一覧 -->
+    <div id="listView">
+      <div class="list-header">
+        <div>
+          <div class="list-title">店舗一覧</div>
+          <div class="list-meta" id="listMeta"></div>
+        </div>
+        <input type="text" class="search-box" id="searchBox" placeholder="店舗名で絞り込み..." oninput="filterCards()">
+      </div>
+      <div class="cards-grid" id="cardsGrid"></div>
+    </div>
+
+    <!-- 詳細 -->
+    <div id="detailView">
+      <div class="detail-store-header">
+        <div class="detail-store-name" id="detailName"></div>
+        <div class="detail-period" id="detailPeriod"></div>
+      </div>
+      <div class="kgi-bar">
+        <div class="kgi-left">
+          <div class="kgi-tag">KGI ・ 総売上</div>
+          <div class="kgi-amount" id="detailSales">¥0<span class="kgi-unit">円</span></div>
+          <div class="kgi-sublabel">取り消し会計を控除済</div>
+        </div>
+      </div>
+      <div class="detail-kpis">
+        <div class="dkpi new">
+          <div class="dkpi-icon">👤</div>
+          <div class="dkpi-label">新規数</div>
+          <div class="dkpi-value" id="detailNew">—<span class="dkpi-unit">人</span></div>
+        </div>
+        <div class="dkpi contract">
+          <div class="dkpi-icon">📋</div>
+          <div class="dkpi-label">新規契約数</div>
+          <div class="dkpi-value" id="detailContract">—<span class="dkpi-unit">件</span></div>
+        </div>
+        <div class="dkpi price">
+          <div class="dkpi-icon">💴</div>
+          <div class="dkpi-label">新規契約単価</div>
+          <div class="dkpi-sublabel">※0円メニュー除外</div>
+          <div class="dkpi-value" id="detailPrice">—</div>
+        </div>
+        <div class="dkpi rate">
+          <div class="dkpi-icon">📈</div>
+          <div class="dkpi-label">新規契約率</div>
+          <div class="dkpi-value" id="detailRate">—<span class="dkpi-unit">%</span></div>
+        </div>
+      </div>
+      <div class="charts-row">
+        <div class="chart-box">
+          <div class="chart-box-title">📊 日別売上推移（棒：日次 ／ 線：累計）</div>
+          <div class="chart-box-wrap"><canvas id="salesCanvas"></canvas></div>
+        </div>
+        <div class="chart-box">
+          <div class="chart-box-title">👥 日別新規来客数</div>
+          <div class="chart-box-wrap"><canvas id="newCanvas"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = {"months":["202602","202603","202604"],"stores":["-LIME-[小顔・たるみ/毛穴洗浄/ハーブピーリング]","LIME高崎ByAnela【アネラ】","【ニキビケア専門｜ハーブピーリング】韓国肌管理 Belle 水戸","【ニキビケア専門｜ハーブピーリング】韓国肌管理 Belle新潟","【ニキビケア専門｜ハーブピーリング】韓国肌管理Belle蒲田","【ニキビ・毛穴ケア｜ハーブピーリング】韓国肌管理Belle 静岡","【ハーブピーリング l ニキビケア】韓国肌管理Belle つくば","【ハーブピーリング l ニキビケア】韓国肌管理Belle 川越","【ハーブピーリング・フェイシャル】LIME 越谷店","【ハーブピーリング｜ニキビケア】韓国肌管理 Belle赤羽","【ハーブピーリング｜ニキビケア】韓国肌管理Belle 下北沢","【ハーブピーリング｜ニキビケア】韓国肌管理Belle 仙台","【ハーブピーリング｜ニキビケア】韓国肌管理Belle 原宿","【ハーブピーリング｜ニキビケア】韓国肌管理Belle 天王寺","【ハーブピーリング｜ニキビケア】韓国肌管理Belle 所沢","【ハーブピーリング｜ニキビケア】韓国肌管理Belle 桜木町","【ハーブピーリング｜ニキビケア】韓国肌管理Belle 津田沼","【ハーブピーリング｜ニキビケア】韓国肌管理Belle松本","【ハーブピーリング｜小顔・痩身｜毛穴洗浄】韓国肌管理 Belle　後楽園・春日","【ホワイトニング/ハーブピーリング】ニキビケア専門店　韓国肌管理Belle plus 新大阪","【小顔・痩身 / ハーブピーリング】LIME天神","【小顔・痩身 / ハーブピーリング】LIME東銀座","【小顔・痩身/ハーブピーリング】LIME 二子玉川","【小顔・痩身/ハーブピーリング】LIME 新宿三丁目","【小顔・痩身・毛穴・ハーブピーリング】専門店Lift 京都河原町(旧:Belle)","【毛穴/ハーブピーリング】韓国肌管理Belle 布施","【毛穴/ハーブピーリング】韓国肌管理Belle 本八幡","【毛穴/ハーブピーリング】韓国肌管理Belle 高槻","【毛穴│ハーブピーリング】LIME 札幌","【毛穴│ハーブピーリング】韓国肌管理Belle 宇都宮","【毛穴│ハーブピーリング】韓国肌管理Belle 札幌","【毛穴｜ハーブピーリング】LIME 五反田","【毛穴｜ハーブピーリング】韓国肌管理Belle 八王子","【毛穴｜ハーブピーリング】韓国肌管理Belle 博多 ","【毛穴｜ハーブピーリング】韓国肌管理Belle 堀江","【毛穴｜ハーブピーリング】韓国肌管理Belle 大和","【毛穴｜ハーブピーリング】韓国肌管理Belle 大森","【毛穴｜ハーブピーリング】韓国肌管理Belle 広島","【毛穴｜ハーブピーリング】韓国肌管理Belle 志木","【毛穴｜ハーブピーリング】韓国肌管理Belle 戸塚","【毛穴｜ハーブピーリング】韓国肌管理Belle 本厚木","【毛穴｜ハーブピーリング】韓国肌管理Belle 松江","【毛穴｜ハーブピーリング】韓国肌管理Belle 栄","【毛穴｜ハーブピーリング】韓国肌管理Belle 池袋東口","【毛穴｜ハーブピーリング】韓国肌管理Belle 浦安","【毛穴｜ハーブピーリング】韓国肌管理Belle 熊本・水前寺","【毛穴｜ハーブピーリング】韓国肌管理Belle 神戸元町","【毛穴｜ハーブピーリング】韓国肌管理Belle 綱島","【毛穴｜ハーブピーリング】韓国肌管理Belle 練馬","【毛穴｜ハーブピーリング】韓国肌管理Belle 自由が丘","【毛穴｜ハーブピーリング】韓国肌管理Belle 西宮北口","【毛穴｜ハーブピーリング】韓国肌管理Belle 調布","【毛穴｜ハーブピーリング｜痩身】韓国肌管理Belle 熊本店","【韓国肌管理｜ハーブピーリング】ニキビケア専門店Belle小倉","【韓国肌管理｜ハーブピーリング】ニキビケア専門店Belle藤沢","【韓国肌管理｜ハーブピーリング】ニキビケア専門店Belle門前仲町","ハーブピーリング LIME新宿西口","ハーブピーリング | ニキビケア　韓国肌管理Belle那覇おもろまち","ハーブピーリング/小顔コルギ/ニキビケア LIME浦和","ハーブピーリングLIME中野","ハーブピーリングLIME千葉","ハーブピーリングLIME名古屋","ハーブピーリングLIME梅田","ハーブピーリングLIME高田馬場","ハーブピーリング【LIME】心斎橋","ハーブピーリング専門店LIME渋谷","小顔/肌質改善/痩身専門店　LIME 松本","痩身|毛穴|ハーブピーリング　LIME武蔵小杉","韓国美容×肌質改善《Belle渋谷》ハーブピーリング | ニキビケア","［韓国肌管理｜ハーブピーリング］Belle目黒","［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle上野","［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle新宿三丁目","［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle新宿西口","［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle日本橋","［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle溝の口","［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle町田"],"data":{"202602":{"-LIME-[小顔・たるみ/毛穴洗浄/ハーブピーリング]":null,"LIME高崎ByAnela【アネラ】":null,"【ニキビケア専門｜ハーブピーリング】韓国肌管理 Belle 水戸":null,"【ニキビケア専門｜ハーブピーリング】韓国肌管理 Belle新潟":null,"【ニキビケア専門｜ハーブピーリング】韓国肌管理Belle蒲田":null,"【ニキビ・毛穴ケア｜ハーブピーリング】韓国肌管理Belle 静岡":null,"【ハーブピーリング l ニキビケア】韓国肌管理Belle つくば":null,"【ハーブピーリング l ニキビケア】韓国肌管理Belle 川越":null,"【ハーブピーリング・フェイシャル】LIME 越谷店":null,"【ハーブピーリング｜ニキビケア】韓国肌管理 Belle赤羽":null,"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 下北沢":{"total_sales":689260,"new_count":20,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":9900,"02":8800,"03":17000,"06":0,"07":69500,"08":17600,"09":0,"10":8800,"11":81200,"12":47800,"13":68980,"14":14780,"15":4980,"16":5980,"17":8900,"21":5980,"23":8800,"24":0,"25":66980,"26":109280,"27":63000,"28":71000},"daily_new":{"01":1,"02":1,"03":1,"06":0,"07":1,"08":2,"09":0,"10":1,"11":5,"12":1,"13":1,"14":2,"15":0,"16":1,"17":1,"21":0,"23":1,"24":0,"25":0,"26":1,"27":0,"28":0}},"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 仙台":null,"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 原宿":null,"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 天王寺":null,"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 所沢":null,"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 桜木町":null,"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 津田沼":null,"【ハーブピーリング｜ニキビケア】韓国肌管理Belle松本":null,"【ハーブピーリング｜小顔・痩身｜毛穴洗浄】韓国肌管理 Belle　後楽園・春日":{"total_sales":14900,"new_count":0,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0,"daily_sales":{"28":14900},"daily_new":{"28":0}},"【ホワイトニング/ハーブピーリング】ニキビケア専門店　韓国肌管理Belle plus 新大阪":null,"【小顔・痩身 / ハーブピーリング】LIME天神":null,"【小顔・痩身 / ハーブピーリング】LIME東銀座":null,"【小顔・痩身/ハーブピーリング】LIME 二子玉川":null,"【小顔・痩身/ハーブピーリング】LIME 新宿三丁目":null,"【小顔・痩身・毛穴・ハーブピーリング】専門店Lift 京都河原町(旧:Belle)":null,"【毛穴/ハーブピーリング】韓国肌管理Belle 布施":null,"【毛穴/ハーブピーリング】韓国肌管理Belle 本八幡":null,"【毛穴/ハーブピーリング】韓国肌管理Belle 高槻":null,"【毛穴│ハーブピーリング】LIME 札幌":null,"【毛穴│ハーブピーリング】韓国肌管理Belle 宇都宮":null,"【毛穴│ハーブピーリング】韓国肌管理Belle 札幌":null,"【毛穴｜ハーブピーリング】LIME 五反田":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 八王子":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 博多 ":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 堀江":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 大和":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 大森":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 広島":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 志木":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 戸塚":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 本厚木":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 松江":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 栄":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 池袋東口":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 浦安":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 熊本・水前寺":{"total_sales":0,"new_count":0,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0,"daily_sales":{"28":0},"daily_new":{"28":0}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 神戸元町":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 綱島":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 練馬":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 自由が丘":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 西宮北口":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 調布":null,"【毛穴｜ハーブピーリング｜痩身】韓国肌管理Belle 熊本店":null,"【韓国肌管理｜ハーブピーリング】ニキビケア専門店Belle小倉":null,"【韓国肌管理｜ハーブピーリング】ニキビケア専門店Belle藤沢":null,"【韓国肌管理｜ハーブピーリング】ニキビケア専門店Belle門前仲町":null,"ハーブピーリング LIME新宿西口":null,"ハーブピーリング | ニキビケア　韓国肌管理Belle那覇おもろまち":null,"ハーブピーリング/小顔コルギ/ニキビケア LIME浦和":null,"ハーブピーリングLIME中野":null,"ハーブピーリングLIME千葉":null,"ハーブピーリングLIME名古屋":null,"ハーブピーリングLIME梅田":null,"ハーブピーリングLIME高田馬場":null,"ハーブピーリング【LIME】心斎橋":null,"ハーブピーリング専門店LIME渋谷":null,"小顔/肌質改善/痩身専門店　LIME 松本":null,"痩身|毛穴|ハーブピーリング　LIME武蔵小杉":null,"韓国美容×肌質改善《Belle渋谷》ハーブピーリング | ニキビケア":null,"［韓国肌管理｜ハーブピーリング］Belle目黒":null,"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle上野":null,"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle新宿三丁目":null,"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle新宿西口":null,"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle日本橋":null,"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle溝の口":null,"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle町田":null},"202603":{"-LIME-[小顔・たるみ/毛穴洗浄/ハーブピーリング]":{"total_sales":197260,"new_count":7,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":73400,"02":100580,"03":23280},"daily_new":{"01":2,"02":3,"03":2}},"LIME高崎ByAnela【アネラ】":{"total_sales":74600,"new_count":5,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"08":7900,"17":11000,"18":11000,"21":26000,"23":9900,"25":8800},"daily_new":{"08":1,"17":1,"18":1,"21":0,"23":1,"25":1}},"【ニキビケア専門｜ハーブピーリング】韓国肌管理 Belle 水戸":{"total_sales":724900,"new_count":29,"new_contract_count":2,"new_contract_unit_price":140400,"new_contract_rate":6.9,"daily_sales":{"01":0,"03":0,"04":0,"06":0,"07":0,"08":4500,"09":0,"10":0,"11":112500,"12":6800,"13":13600,"14":25600,"15":12900,"16":12800,"17":8800,"18":127000,"19":13000,"20":22300,"21":17600,"22":1000,"23":6800,"24":17400,"25":0,"26":11800,"27":0,"28":108600,"29":188600,"30":0,"31":13300},"daily_new":{"01":0,"03":0,"04":0,"06":0,"07":0,"08":0,"09":0,"10":0,"11":2,"12":1,"13":2,"14":2,"15":1,"16":1,"17":1,"18":2,"19":2,"20":2,"21":2,"22":1,"23":1,"24":1,"25":0,"26":1,"27":0,"28":1,"29":3,"30":1,"31":2}},"【ニキビケア専門｜ハーブピーリング】韓国肌管理 Belle新潟":{"total_sales":1931600,"new_count":32,"new_contract_count":11,"new_contract_unit_price":67859,"new_contract_rate":34.4,"daily_sales":{"01":111500,"02":54700,"03":82200,"04":101200,"05":18500,"06":26150,"07":196700,"08":10800,"09":8000,"10":21500,"11":20100,"12":54900,"13":37600,"14":10800,"15":111700,"16":95800,"17":32000,"18":5000,"19":71350,"20":20800,"21":218300,"22":89500,"23":33100,"24":27100,"26":117000,"27":28300,"28":117600,"29":97000,"30":75000,"31":37400},"daily_new":{"01":2,"02":2,"03":2,"04":0,"05":0,"06":0,"07":2,"08":1,"09":0,"10":1,"11":1,"12":1,"13":2,"14":1,"15":1,"16":1,"17":0,"18":0,"19":3,"20":1,"21":1,"22":1,"23":3,"24":0,"26":1,"27":2,"28":1,"29":1,"30":0,"31":1}},"【ニキビケア専門｜ハーブピーリング】韓国肌管理Belle蒲田":{"total_sales":1439440,"new_count":27,"new_contract_count":7,"new_contract_unit_price":45357,"new_contract_rate":25.9,"daily_sales":{"01":73100,"02":6500,"03":4900,"06":25400,"07":54500,"08":62750,"09":13000,"11":8900,"12":118400,"14":65400,"15":189960,"17":26500,"18":35000,"20":89600,"21":14700,"22":108910,"23":72000,"24":12700,"27":90710,"28":142410,"29":209800,"30":6500,"31":7800},"daily_new":{"01":1,"02":2,"03":0,"06":0,"07":2,"08":0,"09":2,"11":0,"12":1,"14":0,"15":0,"17":2,"18":2,"20":1,"21":1,"22":3,"23":0,"24":1,"27":3,"28":2,"29":2,"30":1,"31":1}},"【ニキビ・毛穴ケア｜ハーブピーリング】韓国肌管理Belle 静岡":{"total_sales":1488100,"new_count":20,"new_contract_count":4,"new_contract_unit_price":63900,"new_contract_rate":20.0,"daily_sales":{"01":35600,"03":114000,"04":355800,"05":48800,"06":4000,"07":0,"08":8800,"09":120000,"10":11700,"12":21000,"14":63000,"15":29600,"16":14000,"17":19000,"20":58500,"21":11600,"22":147700,"23":115600,"25":8800,"26":92000,"28":37000,"29":33400,"30":131700,"31":6500},"daily_new":{"01":2,"03":0,"04":0,"05":1,"06":1,"07":0,"08":1,"09":0,"10":1,"12":0,"14":1,"15":3,"16":0,"17":0,"20":2,"21":0,"22":1,"23":1,"25":1,"26":0,"28":0,"29":3,"30":1,"31":1}},"【ハーブピーリング l ニキビケア】韓国肌管理Belle つくば":{"total_sales":233800,"new_count":14,"new_contract_count":1,"new_contract_unit_price":57000,"new_contract_rate":7.1,"daily_sales":{"01":9800,"04":16400,"05":77900,"07":11000,"10":6500,"11":12300,"13":9800,"17":7000,"19":18500,"21":14000,"22":6500,"24":7500,"25":7800,"27":6500,"28":14500,"30":7800},"daily_new":{"01":1,"04":0,"05":1,"07":0,"10":1,"11":2,"13":1,"17":0,"19":1,"21":0,"22":1,"24":1,"25":1,"27":2,"28":1,"30":1}},"【ハーブピーリング l ニキビケア】韓国肌管理Belle 川越":{"total_sales":1363500,"new_count":35,"new_contract_count":4,"new_contract_unit_price":107700,"new_contract_rate":11.4,"daily_sales":{"01":108800,"02":46400,"03":4900,"04":6500,"05":49300,"06":3000,"07":99200,"08":42200,"09":0,"10":160800,"11":8000,"12":18000,"13":3000,"15":13000,"16":5900,"17":102800,"18":8800,"19":4900,"20":0,"21":29700,"22":221700,"23":29100,"24":0,"25":7000,"26":12900,"27":12900,"28":200900,"29":138000,"30":20900,"31":4900},"daily_new":{"01":1,"02":3,"03":0,"04":1,"05":4,"06":1,"07":2,"08":3,"09":0,"10":3,"11":0,"12":1,"13":1,"15":3,"16":0,"17":1,"18":1,"19":0,"20":0,"21":2,"22":1,"23":0,"24":0,"25":0,"26":1,"27":1,"28":2,"29":2,"30":1,"31":0}},"【ハーブピーリング・フェイシャル】LIME 越谷店":{"total_sales":1145120,"new_count":21,"new_contract_count":12,"new_contract_unit_price":42517,"new_contract_rate":57.1,"daily_sales":{"01":26700,"03":26000,"04":33500,"05":90400,"07":18000,"08":52900,"09":34200,"10":11900,"12":16500,"13":61700,"14":13000,"15":64090,"17":92300,"18":31000,"19":27600,"21":84900,"22":38900,"23":52000,"25":168400,"26":59900,"28":85230,"29":56000},"daily_new":{"01":1,"03":1,"04":0,"05":1,"07":0,"08":1,"09":1,"10":0,"12":0,"13":1,"14":0,"15":2,"17":1,"18":1,"19":1,"21":1,"22":1,"23":0,"25":3,"26":1,"28":2,"29":2}},"【ハーブピーリング｜ニキビケア】韓国肌管理 Belle赤羽":{"total_sales":484500,"new_count":15,"new_contract_count":5,"new_contract_unit_price":23000,"new_contract_rate":33.3,"daily_sales":{"01":11000,"02":8000,"05":7000,"06":63000,"07":36500,"10":11500,"11":43000,"12":7000,"14":26800,"15":54300,"16":14800,"18":30900,"19":6800,"20":16800,"22":14800,"23":61000,"26":23000,"28":40300,"29":8000},"daily_new":{"01":0,"02":1,"05":1,"06":2,"07":1,"10":0,"11":0,"12":0,"14":2,"15":1,"16":0,"18":1,"19":1,"20":1,"22":1,"23":1,"26":0,"28":1,"29":1}},"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 下北沢":{"total_sales":39100,"new_count":3,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":30300,"02":0,"03":8800},"daily_new":{"01":2,"02":0,"03":1}},"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 仙台":{"total_sales":1084600,"new_count":19,"new_contract_count":1,"new_contract_unit_price":59400,"new_contract_rate":5.3,"daily_sales":{"01":46300,"02":21600,"03":13000,"04":19800,"05":28400,"06":0,"07":124200,"08":12500,"09":14500,"10":26300,"11":6500,"12":8800,"13":79200,"14":21000,"15":25900,"16":0,"17":195500,"18":48800,"19":0,"20":0,"21":42100,"22":182300,"23":9500,"24":0,"25":14500,"26":13200,"27":9000,"29":32100,"30":26400,"31":63200},"daily_new":{"01":0,"02":2,"03":0,"04":0,"05":0,"06":0,"07":2,"08":0,"09":0,"10":0,"11":1,"12":1,"13":2,"14":1,"15":1,"16":0,"17":0,"18":4,"19":0,"20":0,"21":1,"22":0,"23":0,"24":0,"25":0,"26":0,"27":0,"29":0,"30":2,"31":2}},"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 原宿":{"total_sales":709900,"new_count":21,"new_contract_count":4,"new_contract_unit_price":31500,"new_contract_rate":19.0,"daily_sales":{"01":26400,"02":80300,"05":87000,"06":12500,"07":77600,"08":80900,"11":10000,"12":5500,"13":8000,"14":71300,"16":8800,"17":66000,"19":30000,"20":5500,"21":8800,"22":12800,"23":9800,"25":28000,"27":18800,"28":22900,"29":8000,"31":31000},"daily_new":{"01":3,"02":2,"05":1,"06":1,"07":2,"08":0,"11":1,"12":1,"13":0,"14":1,"16":1,"17":0,"19":2,"20":1,"21":1,"22":0,"23":1,"25":2,"27":1,"28":0,"29":0,"31":0}},"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 天王寺":{"total_sales":180500,"new_count":14,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":79000,"04":10500,"07":5800,"15":8800,"16":8800,"17":10000,"20":8800,"21":18800,"22":0,"24":1000,"29":14500,"30":9500,"31":5000},"daily_new":{"01":1,"04":1,"07":1,"15":1,"16":1,"17":1,"20":2,"21":2,"22":0,"24":0,"29":2,"30":1,"31":1}},"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 所沢":{"total_sales":338600,"new_count":9,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":13500,"03":7000,"04":0,"06":21000,"07":6500,"09":29000,"10":7000,"12":7000,"14":16800,"16":28600,"17":15800,"18":7000,"19":105900,"28":41900,"29":15800,"30":7000,"31":8800},"daily_new":{"01":1,"03":0,"04":0,"06":0,"07":1,"09":0,"10":0,"12":0,"14":1,"16":2,"17":1,"18":0,"19":0,"28":0,"29":1,"30":0,"31":2}},"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 桜木町":{"total_sales":618300,"new_count":14,"new_contract_count":1,"new_contract_unit_price":102000,"new_contract_rate":7.1,"daily_sales":{"01":17800,"03":12000,"08":18600,"09":4000,"11":8800,"13":8900,"15":17600,"16":7000,"18":8900,"24":8800,"27":343500,"28":17800,"29":144600},"daily_new":{"01":1,"03":1,"08":2,"09":0,"11":1,"13":1,"15":2,"16":0,"18":1,"24":1,"27":0,"28":2,"29":2}},"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 津田沼":{"total_sales":374220,"new_count":13,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":36300,"02":4980,"04":14000,"05":13500,"06":13200,"09":0,"10":16200,"13":16380,"14":42380,"15":94700,"17":13000,"19":13600,"21":18000,"22":15600,"24":7000,"28":50400,"30":4980},"daily_new":{"01":1,"02":1,"04":0,"05":0,"06":0,"09":0,"10":1,"13":1,"14":2,"15":2,"17":0,"19":2,"21":0,"22":2,"24":0,"28":0,"30":1}},"【ハーブピーリング｜ニキビケア】韓国肌管理Belle松本":{"total_sales":837000,"new_count":13,"new_contract_count":5,"new_contract_unit_price":120200,"new_contract_rate":38.5,"daily_sales":{"01":0,"02":7900,"04":23300,"05":245600,"07":122800,"08":0,"09":0,"10":0,"11":7000,"13":8800,"14":12800,"15":4000,"17":13800,"18":5500,"20":9900,"21":90500,"22":1800,"23":0,"25":7400,"28":214600,"30":8800,"31":52500},"daily_new":{"01":0,"02":0,"04":1,"05":2,"07":1,"08":0,"09":0,"10":0,"11":0,"13":1,"14":1,"15":0,"17":1,"18":1,"20":0,"21":1,"22":0,"23":0,"25":0,"28":2,"30":1,"31":1}},"【ハーブピーリング｜小顔・痩身｜毛穴洗浄】韓国肌管理 Belle　後楽園・春日":{"total_sales":397300,"new_count":4,"new_contract_count":2,"new_contract_unit_price":40000,"new_contract_rate":50.0,"daily_sales":{"01":118100,"03":0,"05":0,"07":7800,"08":0,"10":4500,"12":0,"13":2900,"14":4900,"15":5500,"18":4500,"19":33000,"21":43000,"22":70800,"24":25000,"25":63000,"27":0,"28":14300,"31":0},"daily_new":{"01":0,"03":0,"05":0,"07":1,"08":0,"10":0,"12":0,"13":0,"14":0,"15":0,"18":0,"19":0,"21":0,"22":1,"24":1,"25":0,"27":0,"28":1,"31":0}},"【ホワイトニング/ハーブピーリング】ニキビケア専門店　韓国肌管理Belle plus 新大阪":{"total_sales":133600,"new_count":6,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"09":6500,"12":0,"13":68200,"15":0,"18":11250,"19":0,"22":8800,"23":0,"30":5750,"31":33100},"daily_new":{"09":1,"12":0,"13":1,"15":0,"18":1,"19":0,"22":1,"23":0,"30":0,"31":2}},"【小顔・痩身 / ハーブピーリング】LIME天神":{"total_sales":267600,"new_count":18,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":30680,"03":4980,"08":12900,"10":14880,"11":16900,"13":35500,"17":9800,"19":25000,"20":12900,"21":16500,"24":14000,"25":15900,"28":15800,"29":25000,"31":16860},"daily_new":{"01":3,"03":1,"08":1,"10":2,"11":0,"13":1,"17":1,"19":0,"20":1,"21":1,"24":1,"25":1,"28":1,"29":2,"31":2}},"【小顔・痩身 / ハーブピーリング】LIME東銀座":{"total_sales":322100,"new_count":12,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"02":0,"05":34900,"09":17400,"10":9800,"11":17600,"12":39000,"14":8500,"15":9900,"17":27400,"20":27000,"26":8800,"27":9800,"30":103200,"31":8800},"daily_new":{"02":0,"05":2,"09":0,"10":1,"11":2,"12":1,"14":0,"15":0,"17":3,"20":1,"26":0,"27":0,"30":1,"31":1}},"【小顔・痩身/ハーブピーリング】LIME 二子玉川":{"total_sales":656678,"new_count":25,"new_contract_count":1,"new_contract_unit_price":59400,"new_contract_rate":4.0,"daily_sales":{"02":22000,"03":3000,"04":2500,"07":29190,"08":23000,"09":28000,"10":10900,"11":10300,"12":31900,"13":9300,"14":18700,"15":21400,"16":31700,"17":7800,"18":7800,"19":4000,"20":15300,"21":11300,"22":6900,"23":26500,"24":0,"25":150000,"26":39688,"27":80500,"28":31900,"29":0,"30":3000,"31":30100},"daily_new":{"02":0,"03":0,"04":0,"07":2,"08":2,"09":1,"10":1,"11":1,"12":1,"13":1,"14":2,"15":1,"16":2,"17":1,"18":1,"19":0,"20":0,"21":1,"22":1,"23":3,"24":0,"25":1,"26":0,"27":1,"28":1,"29":0,"30":0,"31":1}},"【小顔・痩身/ハーブピーリング】LIME 新宿三丁目":{"total_sales":616400,"new_count":7,"new_contract_count":1,"new_contract_unit_price":99000,"new_contract_rate":14.3,"daily_sales":{"01":8000,"03":6000,"04":95000,"07":15400,"08":76100,"09":0,"10":9900,"11":7800,"12":114000,"14":124800,"15":12000,"16":20800,"17":15400,"19":3900,"20":27500,"21":4500,"22":18900,"23":9800,"25":19900,"27":10900,"28":7800,"29":8000},"daily_new":{"01":0,"03":0,"04":0,"07":0,"08":0,"09":0,"10":0,"11":1,"12":0,"14":1,"15":1,"16":0,"17":0,"19":0,"20":1,"21":0,"22":1,"23":1,"25":0,"27":0,"28":1,"29":0}},"【小顔・痩身・毛穴・ハーブピーリング】専門店Lift 京都河原町(旧:Belle)":{"total_sales":291460,"new_count":18,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"02":31800,"03":22300,"04":10000,"06":10980,"07":18980,"08":8800,"10":17800,"11":39000,"13":19400,"14":0,"15":32000,"17":18000,"18":28000,"20":26400,"21":8000},"daily_new":{"02":2,"03":2,"04":1,"06":1,"07":1,"08":1,"10":1,"11":1,"13":1,"14":0,"15":1,"17":1,"18":1,"20":3,"21":1}},"【毛穴/ハーブピーリング】韓国肌管理Belle 布施":{"total_sales":274800,"new_count":8,"new_contract_count":1,"new_contract_unit_price":99000,"new_contract_rate":12.5,"daily_sales":{"02":0,"04":15000,"08":0,"11":15800,"14":14000,"15":0,"16":0,"17":7000,"19":0,"20":6500,"22":22600,"25":7000,"28":0,"29":111900,"30":0,"31":75000},"daily_new":{"02":0,"04":2,"08":0,"11":1,"14":0,"15":0,"16":0,"17":0,"19":0,"20":1,"22":2,"25":0,"28":0,"29":1,"30":0,"31":1}},"【毛穴/ハーブピーリング】韓国肌管理Belle 本八幡":{"total_sales":468000,"new_count":19,"new_contract_count":7,"new_contract_unit_price":41286,"new_contract_rate":36.8,"daily_sales":{"01":-71200,"02":0,"04":7000,"05":4000,"06":0,"07":99800,"08":12900,"11":15000,"12":34300,"13":8800,"15":18800,"17":90700,"18":131600,"20":35800,"21":6500,"22":0,"24":7000,"25":0,"27":18800,"28":26200,"29":22000},"daily_new":{"01":2,"02":0,"04":0,"05":1,"06":0,"07":2,"08":1,"11":0,"12":1,"13":1,"15":1,"17":2,"18":2,"20":1,"21":1,"22":0,"24":0,"25":0,"27":1,"28":2,"29":1}},"【毛穴/ハーブピーリング】韓国肌管理Belle 高槻":{"total_sales":215600,"new_count":8,"new_contract_count":2,"new_contract_unit_price":66000,"new_contract_rate":25.0,"daily_sales":{"01":8000,"08":6500,"11":11700,"14":0,"15":80500,"19":16000,"21":7500,"29":0,"30":85400},"daily_new":{"01":0,"08":1,"11":1,"14":0,"15":1,"19":2,"21":1,"29":0,"30":2}},"【毛穴│ハーブピーリング】LIME 札幌":{"total_sales":247640,"new_count":37,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":0,"02":4500,"03":1000,"04":0,"06":16500,"07":8980,"10":49400,"11":2000,"12":5500,"13":10480,"14":14480,"15":11980,"16":0,"18":12480,"19":4500,"21":12480,"23":0,"24":65380,"25":0,"26":25980,"28":0,"30":0,"31":2000},"daily_new":{"01":0,"02":0,"03":0,"04":0,"06":1,"07":1,"10":0,"11":0,"12":1,"13":1,"14":1,"15":1,"16":0,"18":1,"19":0,"21":2,"23":0,"24":26,"25":0,"26":2,"28":0,"30":0,"31":0}},"【毛穴│ハーブピーリング】韓国肌管理Belle 宇都宮":{"total_sales":225760,"new_count":15,"new_contract_count":1,"new_contract_unit_price":10000,"new_contract_rate":6.7,"daily_sales":{"01":11000,"04":5500,"12":15500,"14":13780,"17":11000,"18":14300,"19":8800,"20":23100,"23":45000,"25":6500,"27":17600,"28":23000,"29":4980,"31":25700},"daily_new":{"01":1,"04":1,"12":1,"14":1,"17":0,"18":1,"19":1,"20":3,"23":0,"25":1,"27":2,"28":2,"29":0,"31":1}},"【毛穴│ハーブピーリング】韓国肌管理Belle 札幌":{"total_sales":509700,"new_count":27,"new_contract_count":6,"new_contract_unit_price":84067,"new_contract_rate":22.2,"daily_sales":{"01":13960,"04":10960,"08":12960,"09":5980,"10":4980,"11":0,"13":161980,"14":4980,"15":10960,"16":41980,"17":5000,"19":7980,"20":5980,"21":27740,"22":0,"23":0,"24":4980,"26":97960,"27":5980,"28":0,"29":65380,"31":19960},"daily_new":{"01":2,"04":2,"08":2,"09":1,"10":1,"11":0,"13":1,"14":2,"15":2,"16":1,"17":0,"19":1,"20":1,"21":3,"22":0,"23":0,"24":2,"26":2,"27":1,"28":0,"29":1,"31":2}},"【毛穴｜ハーブピーリング】LIME 五反田":{"total_sales":827320,"new_count":25,"new_contract_count":7,"new_contract_unit_price":44686,"new_contract_rate":28.0,"daily_sales":{"01":71520,"03":5000,"04":91700,"06":1500,"07":7500,"08":144200,"10":25800,"11":137300,"12":16500,"14":5500,"15":8800,"17":-25700,"18":20300,"19":21300,"21":145700,"22":60300,"24":0,"25":18800,"26":8800,"27":16500,"29":500,"30":20300,"31":25200},"daily_new":{"01":2,"03":0,"04":2,"06":0,"07":0,"08":3,"10":0,"11":1,"12":4,"14":0,"15":1,"17":2,"18":1,"19":2,"21":1,"22":2,"24":0,"25":1,"26":1,"27":0,"29":0,"30":1,"31":1}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 八王子":{"total_sales":706600,"new_count":18,"new_contract_count":7,"new_contract_unit_price":36000,"new_contract_rate":38.9,"daily_sales":{"03":7500,"04":11000,"05":68800,"06":18800,"07":35800,"08":5000,"10":20500,"11":6500,"13":166800,"14":113800,"15":24500,"16":15500,"19":40900,"21":21000,"22":40100,"24":23900,"25":123600,"26":4000,"28":1000,"29":31200,"31":-73600},"daily_new":{"03":0,"04":0,"05":1,"06":1,"07":3,"08":0,"10":1,"11":1,"13":0,"14":2,"15":0,"16":0,"19":1,"21":2,"22":1,"24":1,"25":2,"26":0,"28":1,"29":1,"31":0}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 博多 ":{"total_sales":983500,"new_count":14,"new_contract_count":4,"new_contract_unit_price":144500,"new_contract_rate":28.6,"daily_sales":{"01":4500,"02":7000,"04":411500,"07":42300,"08":29800,"09":9800,"11":12900,"12":200800,"14":58100,"15":9000,"17":44700,"18":11800,"19":4000,"21":29500,"22":56500,"23":11900,"27":12500,"28":12500,"29":0,"30":14400},"daily_new":{"01":0,"02":0,"04":3,"07":1,"08":1,"09":1,"11":1,"12":1,"14":3,"15":0,"17":2,"18":1,"19":0,"21":0,"22":0,"23":0,"27":0,"28":0,"29":0,"30":0}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 堀江":{"total_sales":425200,"new_count":12,"new_contract_count":1,"new_contract_unit_price":10000,"new_contract_rate":8.3,"daily_sales":{"01":8800,"03":8800,"04":22000,"07":0,"09":1900,"10":5000,"11":0,"12":73300,"14":69400,"15":0,"18":12800,"19":24100,"20":19000,"21":42300,"23":28500,"25":0,"26":69000,"27":8800,"28":22700,"29":8800},"daily_new":{"01":1,"03":1,"04":0,"07":1,"09":0,"10":0,"11":0,"12":1,"14":1,"15":0,"18":1,"19":1,"20":1,"21":2,"23":0,"25":0,"26":0,"27":1,"28":0,"29":1}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 大和":{"total_sales":327400,"new_count":11,"new_contract_count":1,"new_contract_unit_price":87000,"new_contract_rate":9.1,"daily_sales":{"01":2000,"02":4000,"03":107800,"04":2000,"05":23600,"06":0,"07":7000,"08":4000,"09":6500,"10":0,"11":6500,"12":2000,"13":14500,"14":10800,"15":3000,"16":11000,"18":7000,"19":28100,"20":13000,"21":8800,"22":4000,"23":2000,"24":11000,"26":7500,"27":0,"28":12500,"29":18300,"30":10500,"31":0},"daily_new":{"01":0,"02":0,"03":1,"04":0,"05":1,"06":0,"07":0,"08":0,"09":0,"10":0,"11":1,"12":0,"13":0,"14":1,"15":0,"16":0,"18":0,"19":1,"20":1,"21":1,"22":0,"23":0,"24":1,"26":0,"27":0,"28":1,"29":2,"30":0,"31":0}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 大森":{"total_sales":441080,"new_count":19,"new_contract_count":4,"new_contract_unit_price":49875,"new_contract_rate":21.1,"daily_sales":{"01":14000,"02":4000,"06":31300,"08":43500,"10":54960,"12":7980,"15":11980,"19":10960,"20":74800,"21":18300,"22":84800,"25":5500,"26":24700,"28":17500,"29":18800,"30":18000},"daily_new":{"01":1,"02":0,"06":1,"08":0,"10":2,"12":1,"15":1,"19":2,"20":1,"21":2,"22":2,"25":1,"26":2,"28":1,"29":1,"30":1}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 広島":{"total_sales":54090,"new_count":12,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":6500,"03":0,"04":0,"05":0,"06":0,"10":4500,"11":14790,"12":0,"16":0,"17":0,"18":0,"23":0,"24":12300,"25":11500,"26":0,"27":4500,"28":0,"30":0,"31":0},"daily_new":{"01":1,"03":0,"04":0,"05":0,"06":0,"10":1,"11":1,"12":0,"16":0,"17":0,"18":1,"23":0,"24":1,"25":2,"26":1,"27":1,"28":2,"30":1,"31":0}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 志木":{"total_sales":410897,"new_count":15,"new_contract_count":1,"new_contract_unit_price":186000,"new_contract_rate":6.7,"daily_sales":{"02":24337,"05":2500,"07":211850,"09":9000,"10":20400,"11":8500,"13":0,"14":10800,"16":0,"17":5980,"18":0,"20":11000,"21":31280,"22":28850,"25":5000,"27":8000,"28":31400,"29":2000},"daily_new":{"02":1,"05":0,"07":2,"09":1,"10":2,"11":1,"13":0,"14":1,"16":0,"17":1,"18":0,"20":0,"21":1,"22":2,"25":0,"27":1,"28":2,"29":0}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 戸塚":{"total_sales":953210,"new_count":20,"new_contract_count":2,"new_contract_unit_price":107700,"new_contract_rate":10.0,"daily_sales":{"01":14800,"03":14800,"04":31600,"05":70900,"06":18500,"10":14000,"11":101440,"12":19400,"14":75600,"15":74200,"17":51700,"18":9800,"19":29400,"21":9800,"22":58430,"23":33600,"24":0,"26":19600,"27":169800,"28":1000,"30":51840,"31":83000},"daily_new":{"01":1,"03":1,"04":2,"05":1,"06":0,"10":0,"11":0,"12":2,"14":0,"15":0,"17":2,"18":1,"19":3,"21":1,"22":0,"23":1,"24":0,"26":1,"27":1,"28":0,"30":0,"31":3}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 本厚木":{"total_sales":964380,"new_count":24,"new_contract_count":2,"new_contract_unit_price":80400,"new_contract_rate":8.3,"daily_sales":{"01":28400,"02":0,"03":22800,"04":83200,"05":0,"06":27900,"07":19200,"08":10000,"09":103400,"10":3000,"11":72000,"12":99000,"13":9900,"14":29900,"15":29400,"16":2000,"17":41700,"18":1000,"19":12900,"20":49200,"21":25500,"22":5980,"23":8800,"24":18000,"25":20200,"26":22700,"27":17600,"28":134200,"29":41500,"30":1000,"31":24000},"daily_new":{"01":1,"02":0,"03":1,"04":0,"05":0,"06":1,"07":2,"08":0,"09":0,"10":0,"11":0,"12":3,"13":0,"14":1,"15":2,"16":0,"17":2,"18":0,"19":0,"20":1,"21":1,"22":0,"23":1,"24":0,"25":1,"26":1,"27":1,"28":1,"29":3,"30":0,"31":1}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 松江":{"total_sales":970500,"new_count":17,"new_contract_count":8,"new_contract_unit_price":76350,"new_contract_rate":47.1,"daily_sales":{"02":0,"03":125800,"05":25000,"06":21000,"07":29500,"09":-68000,"13":0,"14":244900,"15":0,"17":15500,"18":14900,"20":10000,"21":132800,"23":12000,"24":37400,"26":115700,"27":65500,"28":155800,"30":32700},"daily_new":{"02":0,"03":2,"05":1,"06":1,"07":0,"09":1,"13":0,"14":1,"15":0,"17":0,"18":1,"20":0,"21":3,"23":1,"24":1,"26":1,"27":1,"28":1,"30":2}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 栄":{"total_sales":1165980,"new_count":27,"new_contract_count":9,"new_contract_unit_price":74600,"new_contract_rate":33.3,"daily_sales":{"02":5980,"03":12900,"04":35300,"06":122900,"07":21000,"08":89600,"09":218300,"10":-48100,"13":15000,"14":291300,"15":22400,"17":15600,"18":26800,"21":225600,"22":40600,"27":13800,"29":42000,"31":15000},"daily_new":{"02":1,"03":1,"04":1,"06":1,"07":1,"08":2,"09":2,"10":3,"13":1,"14":3,"15":1,"17":1,"18":1,"21":3,"22":1,"27":1,"29":0,"31":3}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 池袋東口":{"total_sales":1929900,"new_count":25,"new_contract_count":10,"new_contract_unit_price":107100,"new_contract_rate":40.0,"daily_sales":{"04":318800,"05":30700,"07":19400,"08":18500,"09":86500,"11":169800,"12":5500,"13":5500,"14":116700,"17":31600,"19":9800,"20":171800,"21":84500,"22":172700,"23":1000,"25":29900,"26":6900,"28":32600,"29":235900,"30":182000,"31":199800},"daily_new":{"04":2,"05":2,"07":1,"08":1,"09":2,"11":1,"12":1,"13":1,"14":1,"17":2,"19":1,"20":1,"21":1,"22":1,"23":0,"25":2,"26":0,"28":2,"29":1,"30":1,"31":1}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 浦安":{"total_sales":982660,"new_count":24,"new_contract_count":6,"new_contract_unit_price":59333,"new_contract_rate":25.0,"daily_sales":{"01":160300,"05":20800,"06":8800,"07":45600,"08":23700,"09":49900,"12":12900,"14":6980,"16":0,"17":45500,"19":105600,"20":154780,"21":244700,"22":51700,"24":7000,"25":0,"28":28100,"29":16300,"30":0},"daily_new":{"01":2,"05":1,"06":1,"07":3,"08":2,"09":1,"12":1,"14":1,"16":0,"17":0,"19":2,"20":2,"21":2,"22":2,"24":0,"25":0,"28":2,"29":2,"30":0}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 熊本・水前寺":{"total_sales":948760,"new_count":18,"new_contract_count":10,"new_contract_unit_price":71280,"new_contract_rate":55.6,"daily_sales":{"01":9400,"02":-181500,"04":6500,"05":27000,"07":17500,"08":101280,"11":7000,"12":143500,"14":19000,"17":0,"18":15980,"20":214980,"21":92180,"22":49580,"23":5500,"25":7000,"26":6500,"28":177780,"29":223600,"31":5980},"daily_new":{"01":0,"02":1,"04":0,"05":1,"07":2,"08":1,"11":0,"12":0,"14":0,"17":0,"18":2,"20":2,"21":1,"22":2,"23":0,"25":0,"26":1,"28":3,"29":1,"31":1}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 神戸元町":{"total_sales":435000,"new_count":19,"new_contract_count":3,"new_contract_unit_price":71333,"new_contract_rate":15.8,"daily_sales":{"01":116000,"04":9800,"06":0,"07":1000,"10":9800,"11":6500,"13":9800,"14":17600,"15":8800,"16":0,"18":0,"19":8800,"20":9800,"22":6800,"25":27400,"27":85800,"29":116100,"30":1000},"daily_new":{"01":1,"04":1,"06":1,"07":0,"10":1,"11":1,"13":1,"14":2,"15":1,"16":0,"18":1,"19":1,"20":1,"22":1,"25":3,"27":1,"29":2,"30":0}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 綱島":{"total_sales":271900,"new_count":18,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":87000,"03":8800,"06":12000,"07":11000,"08":11000,"09":11000,"11":4900,"13":7800,"15":8800,"16":9500,"17":0,"18":7800,"21":12000,"22":8800,"24":23900,"25":12000,"27":6500,"28":1000,"29":18600,"31":9500},"daily_new":{"01":0,"03":2,"06":2,"07":0,"08":0,"09":1,"11":2,"13":2,"15":1,"16":0,"17":0,"18":2,"21":0,"22":1,"24":2,"25":0,"27":1,"28":0,"29":2,"31":0}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 練馬":{"total_sales":183000,"new_count":17,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":21600,"05":6500,"07":35500,"08":8800,"10":8800,"14":17600,"17":16500,"18":10000,"20":11500,"21":0,"22":28600,"28":0,"29":17600,"30":0},"daily_new":{"01":2,"05":1,"07":0,"08":1,"10":1,"14":2,"17":2,"18":1,"20":0,"21":0,"22":1,"28":4,"29":2,"30":0}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 自由が丘":{"total_sales":221130,"new_count":13,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":17600,"02":0,"04":8800,"05":65230,"07":0,"08":5000,"10":8800,"11":0,"12":0,"13":5000,"15":22000,"17":15700,"18":13800,"20":6900,"21":3000,"24":12900,"25":9800,"26":0,"28":16800,"29":9800,"31":0},"daily_new":{"01":2,"02":0,"04":1,"05":1,"07":0,"08":0,"10":1,"11":0,"12":0,"13":0,"15":1,"17":2,"18":1,"20":1,"21":0,"24":1,"25":0,"26":0,"28":1,"29":1,"31":0}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 西宮北口":{"total_sales":278540,"new_count":12,"new_contract_count":1,"new_contract_unit_price":87000,"new_contract_rate":8.3,"daily_sales":{"06":11000,"07":32300,"11":0,"13":18590,"14":27500,"19":18600,"20":100300,"21":0,"24":11750,"26":8800,"28":0,"29":35700,"30":14000},"daily_new":{"06":1,"07":2,"11":0,"13":1,"14":0,"19":2,"20":1,"21":0,"24":1,"26":1,"28":0,"29":1,"30":2}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 調布":{"total_sales":997880,"new_count":17,"new_contract_count":6,"new_contract_unit_price":65700,"new_contract_rate":35.3,"daily_sales":{"01":15500,"02":0,"03":78460,"04":8100,"05":0,"06":15700,"07":0,"08":83010,"09":115800,"10":0,"11":18280,"12":7290,"13":154680,"14":16090,"15":18700,"16":15600,"17":0,"18":8100,"19":0,"20":29450,"21":8910,"22":5900,"23":65300,"24":32000,"25":22600,"26":72300,"27":49900,"28":0,"29":21810,"30":126600,"31":7800},"daily_new":{"01":0,"02":0,"03":0,"04":0,"05":0,"06":1,"07":0,"08":2,"09":1,"10":0,"11":1,"12":0,"13":1,"14":1,"15":1,"16":2,"17":0,"18":0,"19":0,"20":0,"21":0,"22":1,"23":1,"24":0,"25":2,"26":1,"27":0,"28":0,"29":0,"30":1,"31":1}},"【毛穴｜ハーブピーリング｜痩身】韓国肌管理Belle 熊本店":{"total_sales":902120,"new_count":13,"new_contract_count":2,"new_contract_unit_price":156000,"new_contract_rate":15.4,"daily_sales":{"01":0,"04":0,"05":173600,"07":198800,"09":118980,"10":4980,"11":66000,"13":8800,"14":0,"15":4980,"18":4980,"19":178800,"20":7500,"22":118800,"23":-5800,"24":0,"27":12900,"28":8800},"daily_new":{"01":0,"04":0,"05":2,"07":1,"09":1,"10":1,"11":0,"13":1,"14":0,"15":1,"18":1,"19":2,"20":1,"22":0,"23":0,"24":0,"27":1,"28":1}},"【韓国肌管理｜ハーブピーリング】ニキビケア専門店Belle小倉":{"total_sales":387500,"new_count":9,"new_contract_count":1,"new_contract_unit_price":99600,"new_contract_rate":11.1,"daily_sales":{"01":0,"02":9500,"04":0,"05":20000,"07":8800,"08":82650,"09":8800,"10":2500,"13":7500,"14":115080,"15":0,"16":0,"17":20500,"18":10500,"19":11800,"21":31400,"22":0,"24":13970,"26":9800,"28":13000,"29":21700,"30":0},"daily_new":{"01":0,"02":1,"04":0,"05":0,"07":1,"08":0,"09":1,"10":0,"13":0,"14":1,"15":0,"16":0,"17":0,"18":1,"19":1,"21":0,"22":0,"24":0,"26":1,"28":0,"29":2,"30":0}},"【韓国肌管理｜ハーブピーリング】ニキビケア専門店Belle藤沢":{"total_sales":1189700,"new_count":23,"new_contract_count":7,"new_contract_unit_price":92229,"new_contract_rate":30.4,"daily_sales":{"01":72000,"02":142300,"03":95600,"04":17000,"07":0,"08":171800,"09":11000,"10":5500,"11":0,"12":7000,"13":6000,"14":6500,"15":15000,"16":45900,"17":0,"20":18600,"21":86300,"22":44000,"23":80200,"25":19000,"26":114200,"27":0,"28":72000,"30":17000,"31":142800},"daily_new":{"01":1,"02":1,"03":3,"04":0,"07":0,"08":0,"09":1,"10":1,"11":0,"12":0,"13":0,"14":0,"15":0,"16":1,"17":0,"20":2,"21":2,"22":3,"23":0,"25":2,"26":2,"27":1,"28":1,"30":1,"31":1}},"【韓国肌管理｜ハーブピーリング】ニキビケア専門店Belle門前仲町":{"total_sales":531270,"new_count":17,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":5980,"02":15100,"03":0,"04":500,"05":4500,"06":0,"07":0,"08":100850,"09":8800,"10":19800,"14":137700,"15":30090,"16":11300,"18":21300,"20":6300,"21":0,"22":0,"23":16360,"24":0,"25":0,"26":4980,"28":13810,"29":74500,"30":59400},"daily_new":{"01":1,"02":2,"03":0,"04":0,"05":0,"06":0,"07":0,"08":2,"09":1,"10":0,"14":1,"15":1,"16":1,"18":1,"20":1,"21":0,"22":0,"23":2,"24":0,"25":0,"26":1,"28":1,"29":2,"30":0}},"ハーブピーリング LIME新宿西口":{"total_sales":678550,"new_count":22,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":62850,"02":26400,"03":39400,"04":27200,"05":35100,"06":22000,"07":12000,"08":7900,"09":80600,"10":20900,"11":0,"12":4000,"13":1000,"14":6900,"15":14000,"16":25500,"17":77400,"18":22300,"19":20900,"20":0,"21":30400,"22":21300,"24":20300,"25":32000,"26":24000,"27":3000,"28":4000,"29":25700,"30":11500},"daily_new":{"01":1,"02":2,"03":0,"04":1,"05":0,"06":1,"07":1,"08":1,"09":2,"10":1,"11":1,"12":0,"13":0,"14":1,"15":1,"16":1,"17":1,"18":1,"19":2,"20":0,"21":2,"22":1,"24":0,"25":0,"26":0,"27":0,"28":0,"29":1,"30":0}},"ハーブピーリング | ニキビケア　韓国肌管理Belle那覇おもろまち":{"total_sales":791520,"new_count":28,"new_contract_count":5,"new_contract_unit_price":77080,"new_contract_rate":17.9,"daily_sales":{"01":-136900,"03":7000,"04":110420,"06":49000,"07":165520,"08":196280,"10":12700,"11":35600,"14":1000,"15":300,"16":22100,"17":14600,"18":81800,"20":29800,"21":6500,"22":49700,"23":5400,"25":22400,"28":41600,"29":55600,"30":20800,"31":300},"daily_new":{"01":2,"03":0,"04":2,"06":0,"07":2,"08":1,"10":0,"11":1,"14":0,"15":0,"16":0,"17":1,"18":2,"20":3,"21":0,"22":2,"23":2,"25":1,"28":2,"29":1,"30":6,"31":0}},"ハーブピーリング/小顔コルギ/ニキビケア LIME浦和":{"total_sales":953860,"new_count":15,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":31500,"02":95800,"05":36300,"06":19400,"07":9900,"08":43880,"09":79500,"10":41800,"13":11210,"14":122800,"15":11000,"16":49780,"19":34550,"20":70280,"21":45000,"22":44000,"23":29600,"26":19980,"27":22800,"28":41680,"29":71100,"30":22000},"daily_new":{"01":0,"02":1,"05":1,"06":0,"07":0,"08":1,"09":2,"10":0,"13":0,"14":2,"15":0,"16":1,"19":0,"20":1,"21":0,"22":0,"23":1,"26":1,"27":1,"28":2,"29":0,"30":1}},"ハーブピーリングLIME中野":{"total_sales":718850,"new_count":26,"new_contract_count":3,"new_contract_unit_price":44200,"new_contract_rate":11.5,"daily_sales":{"01":11000,"02":48100,"04":0,"05":132400,"06":6400,"07":17400,"08":0,"09":20300,"10":66300,"12":5000,"13":0,"14":58200,"15":57300,"16":106950,"17":16800,"18":8500,"20":0,"21":9000,"22":28800,"23":31800,"24":25900,"25":13500,"26":6000,"27":10500,"28":0,"29":19400,"30":0,"31":19300},"daily_new":{"01":0,"02":1,"04":0,"05":1,"06":1,"07":2,"08":1,"09":2,"10":1,"12":0,"13":1,"14":0,"15":3,"16":1,"17":1,"18":0,"20":0,"21":1,"22":1,"23":3,"24":1,"25":0,"26":0,"27":1,"28":1,"29":1,"30":1,"31":1}},"ハーブピーリングLIME千葉":{"total_sales":1156680,"new_count":27,"new_contract_count":1,"new_contract_unit_price":30000,"new_contract_rate":3.7,"daily_sales":{"01":72500,"02":110000,"06":17500,"07":13000,"08":138300,"09":44500,"10":94240,"12":43500,"13":61800,"14":41400,"15":14500,"17":54000,"18":74400,"20":43400,"21":77460,"22":17000,"23":27300,"25":46000,"26":18500,"28":7500,"29":61380,"30":52000,"31":26500},"daily_new":{"01":2,"02":3,"06":0,"07":1,"08":2,"09":1,"10":0,"12":1,"13":0,"14":2,"15":1,"17":1,"18":1,"20":3,"21":2,"22":0,"23":0,"25":2,"26":3,"28":1,"29":0,"30":0,"31":1}},"ハーブピーリングLIME名古屋":{"total_sales":381700,"new_count":15,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":17900,"02":4000,"03":10700,"04":5900,"05":6500,"07":16000,"08":30600,"09":78500,"10":5000,"11":9500,"12":7800,"14":16900,"15":14000,"16":10000,"18":7800,"19":15400,"21":15900,"22":8000,"23":7500,"24":2000,"26":12900,"27":14000,"28":13000,"29":12000,"30":34400,"31":5500},"daily_new":{"01":2,"02":0,"03":1,"04":1,"05":0,"07":0,"08":1,"09":0,"10":0,"11":1,"12":1,"14":2,"15":0,"16":0,"18":1,"19":0,"21":1,"22":0,"23":0,"24":0,"26":1,"27":0,"28":0,"29":1,"30":1,"31":1}},"ハーブピーリングLIME梅田":{"total_sales":216200,"new_count":15,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"04":2500,"05":32800,"06":0,"08":33500,"10":2500,"12":27400,"13":0,"14":5500,"15":0,"16":0,"18":0,"19":2500,"23":2500,"25":8800,"26":0,"27":8800,"28":72900,"29":11000,"30":5500,"31":0},"daily_new":{"04":0,"05":3,"06":0,"08":3,"10":0,"12":2,"13":0,"14":1,"15":0,"16":0,"18":0,"19":0,"23":0,"25":1,"26":0,"27":1,"28":1,"29":2,"30":1,"31":0}},"ハーブピーリングLIME高田馬場":{"total_sales":952390,"new_count":15,"new_contract_count":2,"new_contract_unit_price":90000,"new_contract_rate":13.3,"daily_sales":{"02":0,"03":36800,"04":13900,"06":5000,"07":76000,"08":0,"09":216000,"10":6500,"11":0,"12":10000,"14":24900,"16":26500,"17":10000,"18":15500,"19":0,"20":23500,"21":69500,"22":6500,"23":87090,"24":68500,"25":13900,"28":9400,"29":179400,"30":34000,"31":19500},"daily_new":{"02":0,"03":1,"04":0,"06":1,"07":0,"08":0,"09":1,"10":1,"11":0,"12":0,"14":0,"16":1,"17":0,"18":0,"19":0,"20":1,"21":0,"22":1,"23":2,"24":1,"25":0,"28":1,"29":1,"30":1,"31":2}},"ハーブピーリング【LIME】心斎橋":{"total_sales":165900,"new_count":1,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":0,"06":0,"08":500,"12":0,"18":59500,"22":43200,"27":0,"31":62700},"daily_new":{"01":0,"06":0,"08":0,"12":0,"18":1,"22":0,"27":0,"31":0}},"ハーブピーリング専門店LIME渋谷":{"total_sales":218750,"new_count":7,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"02":11300,"04":0,"06":23550,"07":39000,"08":8900,"14":90800,"15":18300,"28":18800,"31":8100},"daily_new":{"02":0,"04":0,"06":1,"07":2,"08":0,"14":2,"15":2,"28":0,"31":0}},"小顔/肌質改善/痩身専門店　LIME 松本":{"total_sales":1027047,"new_count":16,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":88700,"02":17980,"04":0,"05":14000,"06":9800,"07":9000,"08":70800,"09":3000,"10":25500,"11":26000,"12":19400,"14":32800,"15":19500,"16":4000,"18":34000,"19":5000,"20":32600,"21":10000,"22":233020,"23":7000,"24":23800,"25":52480,"26":7000,"28":103775,"29":42500,"30":135392},"daily_new":{"01":2,"02":1,"04":0,"05":0,"06":1,"07":0,"08":0,"09":0,"10":0,"11":0,"12":0,"14":1,"15":1,"16":0,"18":1,"19":0,"20":1,"21":0,"22":3,"23":0,"24":1,"25":2,"26":0,"28":0,"29":2,"30":0}},"痩身|毛穴|ハーブピーリング　LIME武蔵小杉":{"total_sales":449250,"new_count":13,"new_contract_count":1,"new_contract_unit_price":10000,"new_contract_rate":7.7,"daily_sales":{"01":94700,"03":7000,"05":19000,"07":0,"08":16800,"10":14500,"11":15400,"12":21000,"14":34000,"15":16500,"17":7500,"18":14400,"19":15800,"20":0,"21":62150,"24":0,"25":6500,"26":32000,"28":10700,"30":19800,"31":41500},"daily_new":{"01":1,"03":0,"05":0,"07":0,"08":1,"10":0,"11":1,"12":1,"14":1,"15":1,"17":0,"18":1,"19":1,"20":0,"21":1,"24":0,"25":1,"26":0,"28":1,"30":1,"31":1}},"韓国美容×肌質改善《Belle渋谷》ハーブピーリング | ニキビケア":{"total_sales":1360777,"new_count":34,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":20500,"02":126020,"03":0,"04":31610,"05":8000,"06":7000,"07":106240,"08":73075,"09":9900,"10":9000,"11":34500,"12":58000,"13":10000,"14":13900,"15":123540,"16":43260,"17":26400,"18":50930,"19":30510,"20":21500,"21":15900,"22":12400,"23":122542,"24":44000,"25":23000,"26":46700,"27":46610,"28":97540,"29":23000,"30":20500,"31":104700},"daily_new":{"01":1,"02":2,"03":0,"04":0,"05":1,"06":0,"07":1,"08":0,"09":1,"10":1,"11":3,"12":1,"13":0,"14":0,"15":1,"16":1,"17":3,"18":1,"19":1,"20":2,"21":1,"22":0,"23":1,"24":2,"25":2,"26":1,"27":1,"28":1,"29":1,"30":2,"31":2}},"［韓国肌管理｜ハーブピーリング］Belle目黒":{"total_sales":602710,"new_count":31,"new_contract_count":5,"new_contract_unit_price":18000,"new_contract_rate":16.1,"daily_sales":{"01":25600,"02":8800,"03":10000,"04":11900,"05":9800,"08":8900,"09":9800,"10":14700,"11":16900,"12":11800,"13":2000,"14":15900,"15":106480,"16":1000,"17":21300,"18":25700,"19":4900,"20":19800,"21":10800,"22":29780,"24":1000,"25":19000,"26":10900,"27":47900,"28":17700,"29":74700,"30":57750,"31":7900},"daily_new":{"01":1,"02":1,"03":1,"04":1,"05":1,"08":0,"09":1,"10":1,"11":1,"12":1,"13":1,"14":1,"15":3,"16":0,"17":3,"18":1,"19":0,"20":1,"21":1,"22":2,"24":0,"25":2,"26":1,"27":2,"28":1,"29":1,"30":2,"31":0}},"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle上野":{"total_sales":1104940,"new_count":18,"new_contract_count":5,"new_contract_unit_price":118800,"new_contract_rate":27.8,"daily_sales":{"01":17800,"02":220800,"03":105000,"06":16800,"07":-43530,"08":5000,"09":24800,"10":5000,"11":16000,"13":10000,"14":104500,"15":4000,"16":44600,"17":25800,"18":12900,"20":89000,"22":-6280,"24":14000,"25":3850,"26":118900,"28":249300,"29":-86100,"30":24000,"31":128800},"daily_new":{"01":1,"02":1,"03":0,"06":1,"07":2,"08":0,"09":1,"10":0,"11":0,"13":0,"14":0,"15":0,"16":2,"17":0,"18":1,"20":1,"22":0,"24":0,"25":0,"26":1,"28":3,"29":2,"30":1,"31":1}},"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle新宿三丁目":{"total_sales":66300,"new_count":4,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":0,"04":6000,"10":8800,"13":13800,"14":5000,"15":1000,"16":1000,"18":5400,"19":8800,"21":0,"24":5500,"28":11000,"30":0},"daily_new":{"01":0,"04":0,"10":1,"13":1,"14":0,"15":0,"16":0,"18":0,"19":1,"21":0,"24":1,"28":0,"30":0}},"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle新宿西口":{"total_sales":591330,"new_count":18,"new_contract_count":3,"new_contract_unit_price":53133,"new_contract_rate":16.7,"daily_sales":{"01":17000,"03":0,"06":35400,"08":2000,"09":2000,"10":500,"11":68230,"13":64600,"14":90200,"15":14800,"16":6500,"17":0,"19":13900,"20":4000,"21":8800,"22":11000,"23":2000,"24":45000,"25":10800,"27":0,"28":20600,"29":88800,"31":85200},"daily_new":{"01":0,"03":0,"06":3,"08":0,"09":0,"10":0,"11":2,"13":1,"14":3,"15":1,"16":0,"17":0,"19":0,"20":0,"21":1,"22":0,"23":0,"24":0,"25":1,"27":0,"28":2,"29":3,"31":1}},"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle日本橋":{"total_sales":397590,"new_count":17,"new_contract_count":1,"new_contract_unit_price":87000,"new_contract_rate":5.9,"daily_sales":{"01":8800,"02":3000,"03":14000,"04":0,"05":8800,"06":16300,"07":0,"08":104600,"10":8500,"11":90450,"12":0,"14":57000,"15":28600,"16":7800,"17":16600,"18":1000,"22":0,"26":9800,"27":0,"28":0,"30":18340,"31":4000},"daily_new":{"01":1,"02":1,"03":1,"04":0,"05":1,"06":1,"07":0,"08":2,"10":1,"11":1,"12":0,"14":0,"15":2,"16":1,"17":2,"18":0,"22":0,"26":1,"27":1,"28":0,"30":1,"31":0}},"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle溝の口":{"total_sales":1245040,"new_count":16,"new_contract_count":0,"new_contract_unit_price":0,"new_contract_rate":0.0,"daily_sales":{"01":62000,"02":118700,"03":5000,"05":5000,"06":7500,"07":5000,"08":121500,"09":129000,"10":48900,"11":6500,"12":50000,"14":123300,"15":8500,"16":8800,"17":17300,"18":19500,"19":15300,"20":142400,"21":2000,"22":7980,"23":0,"24":10500,"25":29800,"26":5000,"27":6500,"28":195830,"29":14000,"30":64430,"31":14800},"daily_new":{"01":0,"02":2,"03":0,"05":0,"06":0,"07":0,"08":1,"09":1,"10":1,"11":0,"12":0,"14":1,"15":0,"16":0,"17":1,"18":0,"19":2,"20":1,"21":0,"22":1,"23":0,"24":0,"25":2,"26":0,"27":0,"28":1,"29":0,"30":0,"31":2}},"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle町田":{"total_sales":642220,"new_count":15,"new_contract_count":1,"new_contract_unit_price":9200,"new_contract_rate":6.7,"daily_sales":{"01":17500,"03":14700,"04":10200,"05":9200,"07":0,"08":5500,"09":82480,"11":209300,"13":10500,"14":36380,"15":8800,"17":8800,"18":31600,"20":13680,"21":13480,"22":7900,"23":74800,"26":19000,"27":23700,"28":3000,"30":22700,"31":19000},"daily_new":{"01":0,"03":1,"04":0,"05":0,"07":0,"08":0,"09":1,"11":1,"13":1,"14":2,"15":1,"17":1,"18":0,"20":1,"21":1,"22":0,"23":1,"26":1,"27":1,"28":0,"30":0,"31":2}}},"202604":{"-LIME-[小顔・たるみ/毛穴洗浄/ハーブピーリング]":null,"LIME高崎ByAnela【アネラ】":null,"【ニキビケア専門｜ハーブピーリング】韓国肌管理 Belle 水戸":null,"【ニキビケア専門｜ハーブピーリング】韓国肌管理 Belle新潟":null,"【ニキビケア専門｜ハーブピーリング】韓国肌管理Belle蒲田":null,"【ニキビ・毛穴ケア｜ハーブピーリング】韓国肌管理Belle 静岡":null,"【ハーブピーリング l ニキビケア】韓国肌管理Belle つくば":null,"【ハーブピーリング l ニキビケア】韓国肌管理Belle 川越":null,"【ハーブピーリング・フェイシャル】LIME 越谷店":null,"【ハーブピーリング｜ニキビケア】韓国肌管理 Belle赤羽":null,"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 下北沢":null,"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 仙台":null,"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 原宿":null,"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 天王寺":null,"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 所沢":null,"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 桜木町":null,"【ハーブピーリング｜ニキビケア】韓国肌管理Belle 津田沼":null,"【ハーブピーリング｜ニキビケア】韓国肌管理Belle松本":null,"【ハーブピーリング｜小顔・痩身｜毛穴洗浄】韓国肌管理 Belle　後楽園・春日":null,"【ホワイトニング/ハーブピーリング】ニキビケア専門店　韓国肌管理Belle plus 新大阪":null,"【小顔・痩身 / ハーブピーリング】LIME天神":null,"【小顔・痩身 / ハーブピーリング】LIME東銀座":null,"【小顔・痩身/ハーブピーリング】LIME 二子玉川":null,"【小顔・痩身/ハーブピーリング】LIME 新宿三丁目":null,"【小顔・痩身・毛穴・ハーブピーリング】専門店Lift 京都河原町(旧:Belle)":null,"【毛穴/ハーブピーリング】韓国肌管理Belle 布施":null,"【毛穴/ハーブピーリング】韓国肌管理Belle 本八幡":null,"【毛穴/ハーブピーリング】韓国肌管理Belle 高槻":null,"【毛穴│ハーブピーリング】LIME 札幌":null,"【毛穴│ハーブピーリング】韓国肌管理Belle 宇都宮":null,"【毛穴│ハーブピーリング】韓国肌管理Belle 札幌":null,"【毛穴｜ハーブピーリング】LIME 五反田":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 八王子":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 博多 ":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 堀江":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 大和":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 大森":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 広島":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 志木":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 戸塚":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 本厚木":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 松江":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 栄":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 池袋東口":{"total_sales":11500,"new_count":2,"new_contract_count":1,"new_contract_unit_price":156000,"new_contract_rate":50.0,"daily_sales":{"01":11500,"02":0},"daily_new":{"01":1,"02":1}},"【毛穴｜ハーブピーリング】韓国肌管理Belle 浦安":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 熊本・水前寺":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 神戸元町":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 綱島":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 練馬":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 自由が丘":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 西宮北口":null,"【毛穴｜ハーブピーリング】韓国肌管理Belle 調布":null,"【毛穴｜ハーブピーリング｜痩身】韓国肌管理Belle 熊本店":null,"【韓国肌管理｜ハーブピーリング】ニキビケア専門店Belle小倉":null,"【韓国肌管理｜ハーブピーリング】ニキビケア専門店Belle藤沢":null,"【韓国肌管理｜ハーブピーリング】ニキビケア専門店Belle門前仲町":null,"ハーブピーリング LIME新宿西口":null,"ハーブピーリング | ニキビケア　韓国肌管理Belle那覇おもろまち":null,"ハーブピーリング/小顔コルギ/ニキビケア LIME浦和":null,"ハーブピーリングLIME中野":null,"ハーブピーリングLIME千葉":null,"ハーブピーリングLIME名古屋":null,"ハーブピーリングLIME梅田":null,"ハーブピーリングLIME高田馬場":null,"ハーブピーリング【LIME】心斎橋":null,"ハーブピーリング専門店LIME渋谷":null,"小顔/肌質改善/痩身専門店　LIME 松本":null,"痩身|毛穴|ハーブピーリング　LIME武蔵小杉":null,"韓国美容×肌質改善《Belle渋谷》ハーブピーリング | ニキビケア":null,"［韓国肌管理｜ハーブピーリング］Belle目黒":null,"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle上野":null,"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle新宿三丁目":null,"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle新宿西口":null,"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle日本橋":null,"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle溝の口":null,"［韓国肌管理｜ハーブピーリング］ニキビケア専門店Belle町田":null}}};
+const PW = "Lime2021";
+const MONTH_MAP = {"202602":"2月","202603":"3月","202604":"4月"};
+
+let curMonth = "202603";
+let salesChart = null, newChart = null;
+
+/* ===== LOGIN ===== */
+function doLogin() {
+  if (document.getElementById('pwField').value === PW) {
+    document.getElementById('pwScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    init();
+  } else {
+    document.getElementById('pwErr').textContent = 'パスワードが正しくありません';
+    document.getElementById('pwField').value = '';
+    document.getElementById('pwField').focus();
+  }
+}
+document.getElementById('pwField').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+/* ===== VIEW TOGGLE ===== */
+function setView(m) {
+  document.body.classList.toggle('mobile', m === 'sp');
+  document.getElementById('vsPC').classList.toggle('active', m === 'pc');
+  document.getElementById('vsSP').classList.toggle('active', m === 'sp');
+  setTimeout(() => { if(salesChart) salesChart.resize(); if(newChart) newChart.resize(); }, 50);
+}
+
+/* ===== INIT ===== */
+function init() {
+  // month tabs
+  const tabs = document.getElementById('monthTabs');
+  DATA.months.forEach(m => {
+    const b = document.createElement('button');
+    b.className = 'month-tab' + (m === curMonth ? ' active' : '');
+    b.textContent = MONTH_MAP[m] || m;
+    b.onclick = () => selectMonth(m);
+    tabs.appendChild(b);
+  });
+  renderList();
+}
+
+function selectMonth(m) {
+  curMonth = m;
+  document.querySelectorAll('.month-tab').forEach(b =>
+    b.classList.toggle('active', b.textContent === (MONTH_MAP[m] || m))
+  );
+  renderList();
+  goList();
+}
+
+/* ===== LIST VIEW ===== */
+function renderList() {
+  const monthLabel = MONTH_MAP[curMonth] || curMonth;
+  const monthData = DATA.data[curMonth] || {};
+  const stores = DATA.stores;
+
+  // stats
+  let validCount = 0, totalSales = 0;
+  stores.forEach(s => { if (monthData[s]) { validCount++; totalSales += monthData[s].total_sales; } });
+  document.getElementById('listMeta').textContent =
+    `${monthLabel} ／ ${validCount}店舗 ／ 全社合計 ¥${totalSales.toLocaleString('ja-JP')}円`;
+
+  const grid = document.getElementById('cardsGrid');
+  grid.innerHTML = '';
+
+  stores.forEach(s => {
+    const d = monthData[s];
+    const card = document.createElement('div');
+    card.className = 'store-card' + (d ? '' : ' no-data-card');
+    card.dataset.name = s;
+
+    if (d) {
+      card.onclick = () => showDetail(s, d);
+      card.innerHTML = `
+        <div class="card-name">${s}</div>
+        <div class="card-arrow">›</div>
+        <div class="card-kgi">¥${d.total_sales.toLocaleString('ja-JP')}</div>
+        <div class="card-kgi-label">総売上</div>
+        <div class="card-kpis">
+          <div class="card-kpi">
+            <div class="ck-label">新規数</div>
+            <div class="ck-value ck-new">${d.new_count}<span class="ck-unit">人</span></div>
+          </div>
+          <div class="card-kpi">
+            <div class="ck-label">新規契約数</div>
+            <div class="ck-value ck-contract">${d.new_contract_count}<span class="ck-unit">件</span></div>
+          </div>
+          <div class="card-kpi">
+            <div class="ck-label">新規契約単価</div>
+            <div class="ck-value ck-price">${d.new_contract_count > 0 && d.new_contract_unit_price > 0 ? '¥' + d.new_contract_unit_price.toLocaleString('ja-JP') : '—'}</div>
+          </div>
+          <div class="card-kpi">
+            <div class="ck-label">新規契約率</div>
+            <div class="ck-value ck-rate">${d.new_contract_rate}<span class="ck-unit">%</span></div>
+          </div>
+        </div>`;
+    } else {
+      card.innerHTML = `
+        <div class="card-name">${s}</div>
+        <div class="no-data-badge">データなし</div>`;
+    }
+    grid.appendChild(card);
+  });
+}
+
+/* ===== SEARCH ===== */
+function filterCards() {
+  const q = document.getElementById('searchBox').value.toLowerCase();
+  document.querySelectorAll('.store-card').forEach(c => {
+    c.style.display = c.dataset.name.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+/* ===== DETAIL VIEW ===== */
+function showDetail(store, d) {
+  document.getElementById('listView').style.display = 'none';
+  document.getElementById('detailView').style.display = 'block';
+  document.getElementById('breadcrumb').classList.add('visible');
+  document.getElementById('bcStore').textContent = store;
+
+  const ml = MONTH_MAP[curMonth] || curMonth;
+  document.getElementById('detailName').textContent = store;
+  document.getElementById('detailPeriod').textContent = `${ml} の実績`;
+
+  document.getElementById('detailSales').innerHTML =
+    '¥' + d.total_sales.toLocaleString('ja-JP') + '<span class="kgi-unit">円</span>';
+  document.getElementById('detailNew').innerHTML =
+    d.new_count + '<span class="dkpi-unit">人</span>';
+  document.getElementById('detailContract').innerHTML =
+    d.new_contract_count + '<span class="dkpi-unit">件</span>';
+  document.getElementById('detailPrice').textContent =
+    (d.new_contract_count > 0 && d.new_contract_unit_price > 0)
+      ? '¥' + d.new_contract_unit_price.toLocaleString('ja-JP')
+      : '—';
+  document.getElementById('detailRate').innerHTML =
+    d.new_contract_rate + '<span class="dkpi-unit">%</span>';
+
+  // charts
+  const days = Object.keys(d.daily_sales).sort();
+  const labels = days.map(d => parseInt(d) + '日');
+  const salesVals = days.map(d2 => d.daily_sales[d2] || 0);
+  const newVals = days.map(d2 => d.daily_new[d2] || 0);
+  let cum = 0;
+  const cumVals = salesVals.map(v => { cum += v; return cum; });
+
+  if (salesChart) salesChart.destroy();
+  if (newChart) newChart.destroy();
+
+  const gridColor = 'rgba(0,0,0,0.05)';
+  const tickColor = '#aaa';
+
+  salesChart = new Chart(document.getElementById('salesCanvas'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '日別売上',
+          data: salesVals,
+          backgroundColor: 'rgba(102,126,234,0.25)',
+          borderColor: 'rgba(102,126,234,0.7)',
+          borderWidth: 1, borderRadius: 3, order: 2
+        },
+        {
+          label: '累計売上',
+          data: cumVals, type: 'line',
+          borderColor: '#764ba2', borderWidth: 2,
+          pointRadius: 2, tension: 0.3, fill: false,
+          yAxisID: 'y2', order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#666', font: { size: 11 }, boxWidth: 12 } } },
+      scales: {
+        x: { ticks: { color: tickColor, font: { size: 10 } }, grid: { color: gridColor } },
+        y: { ticks: { color: tickColor, font: { size: 10 }, callback: v => v >= 10000 ? Math.round(v/10000)+'万' : v }, grid: { color: gridColor } },
+        y2: { position: 'right', ticks: { color: '#764ba2', font: { size: 10 }, callback: v => v >= 10000 ? Math.round(v/10000)+'万' : v }, grid: { display: false } }
+      }
+    }
+  });
+
+  newChart = new Chart(document.getElementById('newCanvas'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: '新規数', data: newVals, backgroundColor: 'rgba(79,135,247,0.35)', borderColor: '#4f87f7', borderWidth: 1, borderRadius: 3 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: tickColor, font: { size: 10 } }, grid: { color: gridColor } },
+        y: { ticks: { color: tickColor, font: { size: 10 }, stepSize: 1, callback: v => v + '人' }, grid: { color: gridColor } }
+      }
+    }
+  });
+}
+
+function goList() {
+  document.getElementById('listView').style.display = 'block';
+  document.getElementById('detailView').style.display = 'none';
+  document.getElementById('breadcrumb').classList.remove('visible');
+  if (salesChart) { salesChart.destroy(); salesChart = null; }
+  if (newChart) { newChart.destroy(); newChart = null; }
+}
+</script>
+</body>
+</html>
